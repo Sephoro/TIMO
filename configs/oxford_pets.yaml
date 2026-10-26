@@ -1,5 +1,5 @@
 # ------ root_path/dataset_name ------
-root_path: '../../DataSets/clip_fewshot'
+root_path: '../DATA'
 
 # ------ Hyperparamters ------
 search_hp: True

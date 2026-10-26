@@ -4,6 +4,8 @@
 ### VS Code ###
 /.vscode/
 /__pycache__/
+__pycache__/
+*.pyc
 
 ### Others ###
 old_env.tar.gz

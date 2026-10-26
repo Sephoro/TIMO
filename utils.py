@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
+import logging
+from pathlib import Path
+from datetime import datetime
 
 
 def cls_acc(output, target, topk=1):
@@ -228,4 +231,68 @@ def save_log(cfg, metric:dict):
         for key in metric.keys():
             with open(f'outputs/{key}.txt', 'a') as f:
                 f.write(f"{cfg['dataset']}_{cfg['shots']}_{cfg['seed']}: {metric[key]}\n")
-                
+
+def device():
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+
+
+
+def setup_logger(name="TIMO", log_dir="..DATA/logs", level=logging.INFO):
+    """
+    Configure a reusable logger that writes to both the console and a log file.
+
+    Args:
+        name: Logger name.
+        log_dir: Directory where log files are stored.
+        level: Minimum logging level.
+
+    Returns:
+        A configured logging.Logger instance.
+    """
+
+    logger = logging.getLogger(name)
+
+    # Avoid adding duplicate handlers if the logger already exists.
+    if logger.handlers:
+        return logger
+
+    logger.setLevel(level)
+    logger.propagate = False
+
+    # Create the log directory if it doesn't exist.
+    log_path = Path(log_dir)
+    log_path.mkdir(parents=True, exist_ok=True)
+
+    # Create a timestamped log file.
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_path = log_path / f"{name}_{timestamp}.log"
+
+    # Format: timestamp | level | logger | message
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+
+    # Console handler.
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+
+    # File handler.
+    file_handler = logging.FileHandler(
+        file_path,
+        mode="a",
+        encoding="utf-8"
+    )
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    logger.info("Logger initialized")
+    logger.info("Log file: %s", file_path.resolve())
+
+    return logger
