@@ -107,8 +107,8 @@ def Refinement(cfg, new_cache_keys, cache_values, clip_weights, new_clip_weights
 def APE(cfg, cache_keys, cache_values, val_features, val_labels, test_features, test_labels, clip_weights, early_stop=False):
     
     feat_dim, cate_num = clip_weights.shape
-    cache_values = cache_values.reshape(cate_num, -1, cate_num).cuda()
-    cache_keys = cache_keys.t().reshape(cate_num, cfg['shots'], feat_dim).reshape(cate_num, -1, feat_dim).cuda()
+    cache_values = cache_values.reshape(cate_num, -1, cate_num).to(device())
+    cache_keys = cache_keys.t().reshape(cate_num, cfg['shots'], feat_dim).reshape(cate_num, -1, feat_dim).to(device())
     
     cache_keys, cache_values = cache_keys.reshape(-1, feat_dim), cache_values.reshape(-1, cate_num)
     
@@ -141,9 +141,9 @@ def GDA(vecs, labels, clip_weights, val_features, val_labels, alpha_shift=False)
 
     # KS Estimator.  
     center_vecs = torch.cat([vecs[labels == i] - mus[i].unsqueeze(0) for i in range(clip_weights.shape[1])])
-    cov_inv = center_vecs.shape[1] * torch.linalg.pinv((center_vecs.shape[0] - 1) * center_vecs.T.cov() + center_vecs.T.cov().trace() * torch.eye(center_vecs.shape[1]).cuda())    
+    cov_inv = center_vecs.shape[1] * torch.linalg.pinv((center_vecs.shape[0] - 1) * center_vecs.T.cov() + center_vecs.T.cov().trace() * torch.eye(center_vecs.shape[1]).to(device()))    
 
-    ps = torch.ones(clip_weights.shape[1]).cuda() * 1. / clip_weights.shape[1]
+    ps = torch.ones(clip_weights.shape[1]).to(device()) * 1. / clip_weights.shape[1]
     W = torch.einsum('nd, dc -> cn', mus, cov_inv)
     b = ps.log() - torch.einsum('nd, dc, nc -> n', mus, cov_inv, mus) / 2
     
@@ -165,9 +165,9 @@ def GDA(vecs, labels, clip_weights, val_features, val_labels, alpha_shift=False)
     # mus = torch.cat([vecs[labels == i].mean(dim=0, keepdim=True) for i in range(clip_weights.shape[1])]).float()  
     # center_vecs = torch.cat([vecs[labels == i] - mus[i].unsqueeze(0) for i in range(clip_weights.shape[1])])
     # cov = center_vecs.T.cov()
-    # cov_inv = center_vecs.shape[1] * torch.linalg.pinv((center_vecs.shape[0] - 1) * cov + cov.trace() * torch.eye(center_vecs.shape[1]).cuda())   
+    # cov_inv = center_vecs.shape[1] * torch.linalg.pinv((center_vecs.shape[0] - 1) * cov + cov.trace() * torch.eye(center_vecs.shape[1]).to(device()))   
     
-    # ps = torch.ones(clip_weights.shape[1]).cuda() * 1. / clip_weights.shape[1]
+    # ps = torch.ones(clip_weights.shape[1]).to(device()) * 1. / clip_weights.shape[1]
     # W = torch.einsum('nd, dc -> cn', mus, cov_inv)
     # b = ps.log() - torch.einsum('nd, dc, nc -> n', mus, cov_inv, mus) / 2    
     

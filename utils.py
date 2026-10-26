@@ -36,7 +36,7 @@ def cal_criterion(cfg, clip_weights, cache_keys, only_use_txt=True, training_fre
         
         feats = text_feat.squeeze()
         
-        sim_sum = torch.zeros((feat_dim)).cuda()
+        sim_sum = torch.zeros((feat_dim)).to(device())
         count = 0
         for i in range(cate_num):
             for j in range(cate_num):
@@ -51,7 +51,7 @@ def cal_criterion(cfg, clip_weights, cache_keys, only_use_txt=True, training_fre
         feats = torch.cat([text_feat, cache_feat], dim=1)
         samp_num = feats.shape[1]
         
-        sim_sum = torch.zeros((feat_dim)).cuda()
+        sim_sum = torch.zeros((feat_dim)).to(device())
         count = 0
         for i in range(cate_num):
             for j in range(cate_num):

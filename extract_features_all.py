@@ -219,14 +219,14 @@ def extract_text_feature_all(cfg, classnames, prompt_paths, clip_model, template
 if __name__ == '__main__':
     
     backbone = 'RN50'
-    seeds = [1, 2]
+    seeds = [1, 2, 3]
     datasets = ['caltech101', 'dtd', 'oxford_pets']
     k_shot = [1, 4, 16]
     norm = True
     data_path = '../DATA'
 
-    clip_model, preprocess = clip.load(backbone, device=device())
-    clip_model.eval()
+    clip_model, preprocess = clip.load(backbone, device=device()) # Load the clip model
+    clip_model.eval() # switch to evaluation mode
 
     logger.info(f'Extracting features for backbone: {backbone}, seeds: {seeds}, datasets: {datasets}, k_shot: {k_shot}, norm: {norm}')
 
@@ -234,8 +234,8 @@ if __name__ == '__main__':
         transforms.RandomResizedCrop(size=224, scale=(0.5, 1), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.ToTensor(),
-        transforms.Normalize(mean=(0.48145466, 0.4578275, 0.40821073),
-                             std=(0.26862954, 0.26130258, 0.27577711))])
+        transforms.Normalize(mean=(0.48145466, 0.4578275, 0.40821073),std=(0.26862954, 0.26130258, 0.27577711))
+        ])
 
     for seed in seeds:
         for name in datasets:
