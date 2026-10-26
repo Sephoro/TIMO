@@ -239,7 +239,7 @@ def device():
 
 
 
-def setup_logger(name="TIMO", log_dir="..DATA/logs", level=logging.INFO):
+def setup_logger(name="TIMO", log_dir="../DATA/logs", level=logging.INFO):
     """
     Configure a reusable logger that writes to both the console and a log file.
 
