@@ -4,7 +4,7 @@ TIMO_MODE="${1:-both}"
 NOISE=0
 
 if [[ ! "$TIMO_MODE" =~ ^(tgi|igt|both)$ ]]; then
-    echo "Usage: $0 {tgi|igt|both} [--noise {4|8}]"
+    echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
     exit 1
 fi
 
@@ -12,12 +12,13 @@ fi
 if [[ "${2:-}" == "--noise" ]]; then
     NOISE="${3:-}"
 
-    if [[ ! "$NOISE" =~ ^(4|8)$ ]] || [[ $# -ne 3 ]]; then
-        echo "Usage: $0 {tgi|igt|both} [--noise {4|8}]"
+    if [[ ! "$NOISE" =~ ^[0-9]+$ ]] || [[ $# -ne 3 ]]; then
+        echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
+        echo "NUMBER must be a non-negative integer."
         exit 1
     fi
 elif [[ $# -gt 1 ]]; then
-    echo "Usage: $0 {tgi|igt|both} [--noise {4|8}]"
+    echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
     exit 1
 fi
 
@@ -27,7 +28,7 @@ do
     do
         for SEED in 1 2 3
         do
-             python main.py \
+            python main.py \
                 --config "configs/${DATA}.yaml" \
                 --shot "${SHOT}" \
                 --seed "${SEED}" \
