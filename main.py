@@ -26,6 +26,7 @@ def get_arguments():
     parser.add_argument('--dbg', dest='dbg', type=float, default=0, help='debug mode')
     parser.add_argument('--config', dest='config', help='settings of Tip-Adapter in yaml format')
     parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both'], default='both', help='TIMO mode: TGI-only, IGT-only, or both')
+    parser.add_argument('--junk', type=int, default=0, help='Number of cross-class junk prompts to inject per class')
 
     args = parser.parse_args()
     return args
@@ -41,6 +42,7 @@ def main():
     cfg['shots'] = args.shot
     cfg['seed'] = args.seed
     cfg['dbg'] = args.dbg
+    junk_prompts = args.junk
 
     if args.timo_mode == None:
         timo_mode = 'both'
@@ -71,6 +73,13 @@ def main():
 
     clip_weights_cupl_all = torch.load(cfg['cache_dir'] + "/text_weights_cupl_t_all.pt", weights_only=False)
 
+    
+    # --- EXTRA EXPERIMENT: CROSS-CLASS JUNK INJECTION ---
+    if junk_prompts > 0:
+        logger.info(f'Injecting {junk_prompts} cross-class junk prompts per class...')
+        clip_weights_cupl_all = inject_junk(clip_weights_cupl_all, junk_prompts, cfg['seed'])
+
+    
     classes, prompt_cupl_num, dim = clip_weights_cupl_all.shape
 
     logger.info(f"Textual features shape: {clip_weights_cupl_all.shape}. Number of classes in the dataset: {classes}. Number of prompts: {prompt_cupl_num}. Dimension of features: {dim}.")
@@ -107,6 +116,11 @@ def main():
     clip_weights_IGT = clip_weights_IGT.t()
 
     metric = {}
+
+    if junk_prompts > 0:
+        _, igt_w = image_guide_text(cfg, clip_weights_cupl_all, image_weights, return_weights=True)
+        metric['junk_weight_share'] = igt_w[:, -junk_prompts:].sum(dim=1).mean().item()
+        metric['junk_equal_share'] = junk_prompts / prompt_cupl_num
     
     # ------------------------------------------ Baseline ------------------------------------------
     # Tip-Adapter
@@ -134,23 +148,14 @@ def main():
     acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels,  clip_weights, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True, timo_mode=timo_mode)
     metric['TIMO'] = acc_free
 
-    # TIMO-S
-    
-    ''' 
-    #TODO  SEARCH FOR GAMMA
-
-    clip_weights_IGT, matching_score = image_guide_text_search(cfg, 
-        clip_weights_cupl_all, val_features, val_labels, image_weights)
-    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels, 
-        clip_weights_IGT, clip_weights_cupl_all, matching_score, 
-        grid_search=True, n_quick_search=10, is_print=True)
-    metric['TIMO_S'] = acc_free
-    '''
 
     if timo_mode == 'both':
         run_name = 'original'
     else:
         run_name = timo_mode
+
+    if junk_prompts > 0:
+        run_name = f'{run_name}_junk{junk_prompts}'
 
     save_log(cfg, metric, run_name=run_name)
 

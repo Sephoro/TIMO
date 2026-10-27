@@ -271,6 +271,19 @@ def _log_with_args(log_method, *args, **kwargs):
 
     log_method(formatted_message, **kwargs)
 
+def inject_junk(t_all, m, seed):
+    # append m prompts borrowed from other classes to every class
+    if m == 0:
+        return t_all
+    g = torch.Generator().manual_seed(seed)
+    c, p, _ = t_all.shape
+    extra = []
+    for i in range(c):
+        donor = (i + torch.randint(1, c, (1,), generator=g).item()) % c
+        idx = torch.randint(0, p, (m,), generator=g)
+        extra.append(t_all[donor, idx])
+    return torch.cat([t_all, torch.stack(extra)], dim=1)
+
 
 def setup_logger(name="TIMO", log_dir="../DATA/logs", level=logging.INFO):
     import os
