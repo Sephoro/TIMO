@@ -25,6 +25,8 @@ def get_arguments():
     parser.add_argument('--seed', dest='seed', type=int, default=1, help='seed')
     parser.add_argument('--dbg', dest='dbg', type=float, default=0, help='debug mode')
     parser.add_argument('--config', dest='config', help='settings of Tip-Adapter in yaml format')
+    parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both'], default='both', help='TIMO mode: TGI-only, IGT-only, or both')
+
     args = parser.parse_args()
     return args
 
@@ -39,9 +41,15 @@ def main():
     cfg['shots'] = args.shot
     cfg['seed'] = args.seed
     cfg['dbg'] = args.dbg
+
+    if args.timo_mode == None:
+        timo_mode = 'both'
+
+    timo_mode = args.timo_mode
     logger.info("shots", cfg['shots'])
     logger.info("seed", cfg['seed'])
     logger.info("dbg", cfg['dbg'])
+    logger.info("timo_mode", timo_mode)
     
     if not os.path.exists('outputs'):
         os.makedirs('outputs')
@@ -115,7 +123,15 @@ def main():
     
     # ------------------------------------------ Ours ------------------------------------------
     # TIMO   
-    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels,  clip_weights_IGT, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True)
+
+    # Use igt or both
+    if timo_mode in {'igt', 'both'}:
+        clip_weights = clip_weights_IGT
+    else:
+        # use only tgi
+        clip_weights = clip_weights_cupl
+
+    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels,  clip_weights, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True, timo_mode=timo_mode)
     metric['TIMO'] = acc_free
 
     # TIMO-S
@@ -131,9 +147,14 @@ def main():
     metric['TIMO_S'] = acc_free
     '''
 
-    save_log(cfg, metric)
-    
-    
+    if timo_mode == 'both':
+        run_name = 'original'
+    else:
+        run_name = timo_mode
+
+    save_log(cfg, metric, run_name=run_name)
+
+
     
 if __name__ == '__main__':
     main()

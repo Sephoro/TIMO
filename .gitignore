@@ -12,3 +12,5 @@ old_env.tar.gz
 requirements_old.txt
 Analyze.py
 test.py
+outputs/analysis/
+*.csv
