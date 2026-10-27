@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+STAMP = datetime.now().strftime('%Y-%m-%d-%HH%M')  # fixed once per run
 
 def cls_acc(output, target, topk=1):
     pred = output.topk(topk, 1, True, True)[1].t()
@@ -18,9 +19,9 @@ def cls_acc(output, target, topk=1):
 
 def cal_criterion(cfg, clip_weights, cache_keys, only_use_txt=True, training_free=True, force=False, with_IE=False):
     
-    feat_dim, cate_num = clip_weights.shape
+    feat_dim, classes = clip_weights.shape
     text_feat = clip_weights.t().unsqueeze(1)
-    cache_feat = cache_keys.reshape(cate_num, -1, feat_dim)
+    cache_feat = cache_keys.reshape(classes, -1, feat_dim)
     
     save_path = f'./caches/{cfg["backbone"]}/{cfg["seed"]}/{cfg["dataset"]}'
     if with_IE:
@@ -38,8 +39,8 @@ def cal_criterion(cfg, clip_weights, cache_keys, only_use_txt=True, training_fre
         
         sim_sum = torch.zeros((feat_dim)).to(device())
         count = 0
-        for i in range(cate_num):
-            for j in range(cate_num):
+        for i in range(classes):
+            for j in range(classes):
                 if i != j:
                     sim_sum += feats[i, :] * feats[j, :]
                     count += 1
@@ -53,8 +54,8 @@ def cal_criterion(cfg, clip_weights, cache_keys, only_use_txt=True, training_fre
         
         sim_sum = torch.zeros((feat_dim)).to(device())
         count = 0
-        for i in range(cate_num):
-            for j in range(cate_num):
+        for i in range(classes):
+            for j in range(classes):
                 for m in range(samp_num):
                     for n in range(samp_num):
                         if i != j:
@@ -89,7 +90,7 @@ def load_few_shot_feature(cfg, norm=True):
     return cache_keys, cache_values
 
 
-def loda_val_test_feature(cfg, split, norm=True):
+def load_val_test_feature(cfg, split, norm=True):
     if norm:
         features = torch.load(cfg['cache_dir'] + "/" + split + "_f.pt", weights_only=False)
         labels = torch.load(cfg['cache_dir'] + "/" + split + "_l.pt", weights_only=False)
@@ -138,42 +139,44 @@ def search_hp(cfg, cache_keys, cache_values, features, labels, clip_weights, ada
                     best_beta = beta
                     best_alpha = alpha
 
-        print("\nAfter searching, the best accuarcy: {:.2f}.\n".format(best_acc))
+        print("\nAfter searching, the best accuracy: {:.2f}.\n".format(best_acc))
 
     return best_beta, best_alpha
 
 
 # t_features [c,p,d]
-# s_features [c,n,d] or [c,d]
-def image_guide_text(cfg, t_features, s_features, gamma=-1, 
-        return_weights=False, return_matching=False):
+# v_features [c,n,d] or [c,d]
+def image_guide_text(cfg, t_features, v_features, gamma=-1,  return_weights=False, return_matching=False):
+   
     t_features = t_features / t_features.norm(dim=-1, keepdim=True)
     
     if gamma == -1:
-        if cfg['dataset'] == "imagenet":
-            gamma = 1
-        elif cfg['dataset'] == "oxford_flowers":
+        if cfg['dataset'] == "oxford_flowers":
             gamma = 100
         else:
             gamma = 50
         
-    cate_num, prompt_num, feat_dim = t_features.shape # c, p, d
-    if len(s_features.shape) == 3:
-        s_features = s_features.mean(dim=1) # c,d
-        s_features = s_features / s_features.norm(dim=-1, keepdim=True)
-    weights = torch.ones(cate_num, prompt_num).to(t_features.dtype).to(t_features.device) # c, p
-    s_features = s_features.to(t_features.dtype)    
+    classes, prompt_num, feat_dim = t_features.shape # c, p, d
+
+    if len(v_features.shape) == 3:
+
+        v_features = v_features.mean(dim=1) # c,d
+        v_features = v_features / v_features.norm(dim=-1, keepdim=True)
+
+    weights = torch.ones(classes, prompt_num).to(t_features.dtype).to(t_features.device) # c, p
+
+    v_features = v_features.to(t_features.dtype)    
     t_features = t_features / t_features.norm(dim=-1, keepdim=True)
     
     matching_score = []
-    for c in range(cate_num):
-        # weights[c:c+1] # 1, p
-        # t_features[c] # p, d
-        # s_features[c:c+1] # 1, d
-        weights[c] = (s_features[c:c+1] @ t_features[c].t()).squeeze(dim=0)
+
+    for c in range(classes):
+ 
+        weights[c] = (v_features[c:c+1] @ t_features[c].t()).squeeze(dim=0)
         matching_score.append(weights[c].clone())
         weights[c] = weights[c] / weights[c].norm() 
         weights[c] = F.softmax(weights[c] * gamma, dim=0)
+
     matching_score = torch.stack(matching_score, dim=0) # N, P
     
     for weights in [weights]:
@@ -213,11 +216,11 @@ def image_guide_text_search(cfg, clip_weights_cupl_all, val_features, val_labels
 
 # anchor K,D
 def vec_sort(vecs_t, matching_score):
-    cate_num, prompt_num, dim = vecs_t.shape # N,P,D
+    classes, prompt_num, dim = vecs_t.shape # N,P,D
     
     weights, sorted_idx = torch.topk(matching_score, k=prompt_num, dim=-1)
     sort_vecs_t = []
-    for c in range(cate_num):
+    for c in range(classes):
         sort_vecs_t.append(vecs_t[c][sorted_idx[c]].clone())
     sort_vecs_t = torch.stack(sort_vecs_t, dim=0)
     
@@ -227,10 +230,16 @@ def vec_sort(vecs_t, matching_score):
     return sort_vecs_t, weights
 
 
-def save_log(cfg, metric:dict):
-        for key in metric.keys():
-            with open(f'outputs/{key}.txt', 'a') as f:
-                f.write(f"{cfg['dataset']}_{cfg['shots']}_{cfg['seed']}: {metric[key]}\n")
+def save_log(cfg, metric:dict, run_name:str="original"):
+    
+    out_dir = f'outputs/{run_name}'
+    os.makedirs(out_dir, exist_ok=True)
+    
+    for key in metric.keys():
+        file_path = f'{out_dir}/{key}.txt'
+        with open(file_path, 'a') as f:
+            f.write(f"{cfg['dataset']}_{cfg['shots']}_{cfg['seed']}: {metric[key]}\n")
+            
 
 def device():
     return "cuda" if torch.cuda.is_available() else "cpu"
@@ -239,60 +248,75 @@ def device():
 
 
 
+
+def _log_with_args(log_method, *args, **kwargs):
+    """Support print-style and standard logging-style arguments."""
+
+    if not args:
+        log_method(**kwargs)
+        return
+
+    message = str(args[0])
+
+    if len(args) == 1:
+        log_method(message, **kwargs)
+        return
+
+    try:
+        # Standard logging: logger.info("Value: %s", value)
+        formatted_message = message % args[1:]
+    except (TypeError, ValueError, KeyError):
+        # Print-style: logger.info("Value:", value)
+        formatted_message = " ".join(str(arg) for arg in args)
+
+    log_method(formatted_message, **kwargs)
+
+
 def setup_logger(name="TIMO", log_dir="../DATA/logs", level=logging.INFO):
-    """
-    Configure a reusable logger that writes to both the console and a log file.
-
-    Args:
-        name: Logger name.
-        log_dir: Directory where log files are stored.
-        level: Minimum logging level.
-
-    Returns:
-        A configured logging.Logger instance.
-    """
+    import os
+    from datetime import datetime
+    from functools import partial
+    from types import MethodType
 
     logger = logging.getLogger(name)
 
-    # Avoid adding duplicate handlers if the logger already exists.
-    if logger.handlers:
-        return logger
+    if not logger.handlers:
+        logger.setLevel(level)
+        logger.propagate = False
 
-    logger.setLevel(level)
-    logger.propagate = False
+        os.makedirs(log_dir, exist_ok=True)
 
-    # Create the log directory if it doesn't exist.
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = os.path.join(log_dir, f"{name}_{timestamp}.log")
 
-    # Create a timestamped log file.
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_path = log_path / f"{name}_{timestamp}.log"
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
 
-    # Format: timestamp | level | logger | message
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
 
-    # Console handler.
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(level)
-    console_handler.setFormatter(formatter)
+        file_handler = logging.FileHandler(
+            log_path, mode="a", encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
 
-    # File handler.
-    file_handler = logging.FileHandler(
-        file_path,
-        mode="a",
-        encoding="utf-8"
-    )
-    file_handler.setLevel(level)
-    file_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
 
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+    # Keep the original logging methods, then wrap them.
+    for method_name in ("debug", "info", "warning", "error", "critical", "exception"):
+        original_method = getattr(logger, method_name)
 
-    logger.info("Logger initialized")
-    logger.info("Log file: %s", file_path.resolve())
+        def make_wrapper(method):
+            def wrapper(*args, **kwargs):
+                _log_with_args(method, *args, **kwargs)
+            return wrapper
+
+        setattr(logger, method_name, make_wrapper(original_method))
+
+    # Support the older .warn() alias as well.
+    logger.warn = logger.warning
 
     return logger

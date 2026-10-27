@@ -17,7 +17,7 @@ from datasets.utils import build_data_loader
 import clip
 from utils import *
 
-logger = logging.getLogger('TIMO')
+logger = setup_logger("TIMO")
 
 def extract_few_shot_feature(cfg, clip_model, train_loader_cache, norm=True):
 

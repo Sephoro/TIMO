@@ -16,6 +16,7 @@ import clip
 from utils import *
 from models import *
 
+logger = setup_logger("TIMO")
 
 def get_arguments():
 
@@ -38,16 +39,16 @@ def main():
     cfg['shots'] = args.shot
     cfg['seed'] = args.seed
     cfg['dbg'] = args.dbg
-    print("shots", cfg['shots'])
-    print("seed", cfg['seed'])
-    print("dbg", cfg['dbg'])
+    logger.info("shots", cfg['shots'])
+    logger.info("seed", cfg['seed'])
+    logger.info("dbg", cfg['dbg'])
     
     if not os.path.exists('outputs'):
         os.makedirs('outputs')
     cache_dir = os.path.join(f'./caches/{cfg["backbone"]}/{cfg["seed"]}/{cfg["dataset"]}')
     os.makedirs(cache_dir, exist_ok=True)
     cfg['cache_dir'] = cache_dir
-    print(cfg)
+    logger.info(cfg)
 
     # CLIP
     clip_model, preprocess = clip.load(cfg['backbone'])
@@ -58,48 +59,54 @@ def main():
     torch.manual_seed(cfg['seed'])
 
     # Textual features
-    print("\nGetting textual features as CLIP's classifier.")
+    logger.info("\nGetting textual features as CLIP's classifier.")
+
     clip_weights_cupl_all = torch.load(cfg['cache_dir'] + "/text_weights_cupl_t_all.pt", weights_only=False)
-    cate_num, prompt_cupl_num, dim = clip_weights_cupl_all.shape
-    clip_weights_cupl = clip_weights_cupl_all.mean(dim=1).t()
+
+    classes, prompt_cupl_num, dim = clip_weights_cupl_all.shape
+
+    logger.info(f"Textual features shape: {clip_weights_cupl_all.shape}. Number of classes in the dataset: {classes}. Number of prompts: {prompt_cupl_num}. Dimension of features: {dim}.")
+
+    
+    clip_weights_cupl = clip_weights_cupl_all.mean(dim=1).t() # average over prompts
     clip_weights_cupl = clip_weights_cupl / clip_weights_cupl.norm(dim=0, keepdim=True)
     
     # Construct the cache model by few-shot training set
-    print("\nConstructing cache model by few-shot visual features and labels.")
+    logger.info("\nConstructing cache model by few-shot visual features and labels.")
     cache_keys, cache_values = load_few_shot_feature(cfg)
 
     # Pre-load val features
-    print("\nLoading visual features and labels from val set.")
-    val_features, val_labels = loda_val_test_feature(cfg, "val")
+    logger.info("\nLoading visual features and labels from val set.")
+    val_features, val_labels = load_val_test_feature(cfg, "val")
     
     # Pre-load test features
-    print("\nLoading visual features and labels from test set.")
-    if cfg['dataset'] == 'imagenet':
-        test_features, test_labels = loda_val_test_feature(cfg, "val")
-    else:
-        test_features, test_labels = loda_val_test_feature(cfg, "test")
+    logger.info("\nLoading visual features and labels from test set.")
+   
+    test_features, test_labels = load_val_test_feature(cfg, "test")
 
 
     # ------------------------------------------ Fusion ------------------------------------------
     
-    image_weights_all = torch.stack([cache_keys.t()[torch.argmax(cache_values, dim=1)==i] for i in range(cate_num)])
+    # Group images by class and compute the mean of their features to get image weights
+    image_weights_all = torch.stack([cache_keys.t()[torch.argmax(cache_values, dim=1)==i] for i in range(classes)]) 
+
+
+    # Build the average prototype for each class and normalize it
     image_weights = image_weights_all.mean(dim=1)
     image_weights = image_weights / image_weights.norm(dim=1, keepdim=True) 
     
-    clip_weights_IGT, matching_score = image_guide_text(cfg, 
-        clip_weights_cupl_all, image_weights, return_matching=True)
+    clip_weights_IGT, matching_score = image_guide_text(cfg,  clip_weights_cupl_all, image_weights, return_matching=True)
     clip_weights_IGT = clip_weights_IGT.t()
+
     metric = {}
     
     # ------------------------------------------ Baseline ------------------------------------------
     # Tip-Adapter
-    acc_free = run_tip_adapter(cfg, cache_keys, cache_values, val_features, val_labels, 
-        test_features, test_labels, clip_weights_cupl)
+    acc_free = run_tip_adapter(cfg, cache_keys, cache_values, val_features, val_labels,  test_features, test_labels, clip_weights_cupl)
     metric['Tip_Adapter'] = acc_free
     
     # APE
-    acc_free = APE(cfg, cache_keys, cache_values, val_features, val_labels,  
-        test_features, test_labels, clip_weights_cupl)
+    acc_free = APE(cfg, cache_keys, cache_values, val_features, val_labels,  test_features, test_labels, clip_weights_cupl)
     metric['APE'] = acc_free
     
     # GDA-CLIP
@@ -108,18 +115,21 @@ def main():
     
     # ------------------------------------------ Ours ------------------------------------------
     # TIMO   
-    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels, 
-        clip_weights_IGT, clip_weights_cupl_all, matching_score,
-        grid_search=False, is_print=True)
+    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels,  clip_weights_IGT, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True)
     metric['TIMO'] = acc_free
 
     # TIMO-S
+    
+    ''' 
+    #TODO  SEARCH FOR GAMMA
+
     clip_weights_IGT, matching_score = image_guide_text_search(cfg, 
         clip_weights_cupl_all, val_features, val_labels, image_weights)
     acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels, 
         clip_weights_IGT, clip_weights_cupl_all, matching_score, 
         grid_search=True, n_quick_search=10, is_print=True)
     metric['TIMO_S'] = acc_free
+    '''
 
     save_log(cfg, metric)
     
