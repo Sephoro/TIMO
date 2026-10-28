@@ -19,7 +19,7 @@ This repository reproduces one claim from *Text and Image Are Mutually Beneficia
 
 ```bash
 mkdir timo-workspace && cd timo-workspace
-git clone https://github.com/Sephoro/TIMO.git && cd TIMO
+git clone git@github.com:Sephoro/TIMO.git && cd TIMO
 conda create -n TIMO python=3.8 -y && conda activate TIMO
 python -m pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 bash run-all.sh      # data, features, all experiments, analysis (several hours)
@@ -50,7 +50,7 @@ Use this section if the quick start failed, timed out, or you prefer to run and 
 
 ```bash
 mkdir timo-workspace && cd timo-workspace
-git clone https://github.com/Sephoro/TIMO.git
+git clone git@github.com:Sephoro/TIMO.git
 cd TIMO
 ```
 
