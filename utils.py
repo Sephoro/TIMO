@@ -193,6 +193,42 @@ def image_guide_text(cfg, t_features, v_features, gamma=-1,  return_weights=Fals
         return normed_clip_weights
 
 
+def build_tgi_features(image_features, text_features):
+    """
+    image_features: [classes, shots, dim]
+    text_features:  [classes, prompts, dim]
+    """
+    # Class-level visual prototypes
+    visual_prototypes = image_features.mean(dim=1)
+    visual_prototypes = F.normalize(visual_prototypes, dim=-1)
+
+    # Match each text prompt to its class's visual prototype
+    similarities = torch.einsum(
+        "cpd,cd->cp", text_features, visual_prototypes
+    )
+
+    # Weight text features using the matching scores
+    weighted_text = text_features * similarities.unsqueeze(-1)
+
+    # Append weighted text features to the image features
+    refined_features = torch.cat(
+        [image_features, weighted_text], dim=1
+    )
+
+    return refined_features, similarities
+
+
+def add_prompts_to_cache(cache_keys, cache_values, prompts_all, matching_score):
+    # cache_keys: D x (N*K), cache_values: (N*K) x N
+    # prompts_all: N x P x D, matching_score: N x P
+    classes, p, dim = prompts_all.shape
+    weighted = (prompts_all * matching_score.unsqueeze(-1)).reshape(classes * p, dim)
+    labels = torch.arange(classes).repeat_interleave(p)
+    values = F.one_hot(labels, num_classes=classes).to(cache_values.dtype).to(cache_values.device)
+    keys = torch.cat([cache_keys, weighted.t().to(cache_keys.dtype).to(cache_keys.device)], dim=1)
+    return keys, torch.cat([cache_values, values], dim=0)
+
+
 def image_guide_text_search(cfg, clip_weights_cupl_all, val_features, val_labels, image_weights):
     best_acc = 0
     best_gamma = 0

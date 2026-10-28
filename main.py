@@ -25,7 +25,7 @@ def get_arguments():
     parser.add_argument('--seed', dest='seed', type=int, default=1, help='seed')
     parser.add_argument('--dbg', dest='dbg', type=float, default=0, help='debug mode')
     parser.add_argument('--config', dest='config', help='settings of Tip-Adapter in yaml format')
-    parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both'], default='both', help='TIMO mode: TGI-only, IGT-only, or both')
+    parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both', 'base'], default='both', help='TIMO mode: TGI-only, IGT-only, or both')
     parser.add_argument('--junk', type=int, default=0, help='Number of cross-class junk prompts to inject per class')
 
     args = parser.parse_args()
@@ -121,35 +121,56 @@ def main():
         _, igt_w = image_guide_text(cfg, clip_weights_cupl_all, image_weights, return_weights=True)
         metric['junk_weight_share'] = igt_w[:, -junk_prompts:].sum(dim=1).mean().item()
         metric['junk_equal_share'] = junk_prompts / prompt_cupl_num
-    
-    # ------------------------------------------ Baseline ------------------------------------------
-    # Tip-Adapter
-    acc_free = run_tip_adapter(cfg, cache_keys, cache_values, val_features, val_labels,  test_features, test_labels, clip_weights_cupl)
+
+    use_igt = timo_mode  == 'igt'
+    use_tgi = timo_mode == 'tgi'
+    use_base = timo_mode == 'base'
+    use_both = timo_mode == 'both'
+
+
+    if use_tgi:
+         
+        clip_text_weights = clip_weights_cupl
+        keys, values = add_prompts_to_cache(cache_keys, cache_values, clip_weights_cupl_all, matching_score)
+
+    elif use_igt:
+
+        clip_text_weights = clip_weights_IGT
+        keys, values = cache_keys, cache_values
+
+    elif use_both:
+        keys, values = add_prompts_to_cache(cache_keys, cache_values, clip_weights_cupl_all, matching_score)
+        clip_text_weights = clip_weights_IGT
+
+    elif use_base:
+        keys, values = cache_keys, cache_values
+        clip_text_weights = clip_weights_cupl
+
+
+    acc_free = run_tip_adapter(cfg, keys, values, val_features, val_labels,  test_features, test_labels, clip_text_weights)
     metric['Tip_Adapter'] = acc_free
-    
-    # APE
-    acc_free = APE(cfg, cache_keys, cache_values, val_features, val_labels,  test_features, test_labels, clip_weights_cupl)
-    metric['APE'] = acc_free
-    
-    # GDA-CLIP
-    acc_free = GDA_CLIP(cfg, val_features, val_labels, test_features, test_labels, clip_weights_cupl)
-    metric['GDA_CLIP'] = acc_free
-    
-    # ------------------------------------------ Ours ------------------------------------------
-    # TIMO   
 
-    # Use igt or both
-    if timo_mode in {'igt', 'both'}:
-        clip_weights = clip_weights_IGT
+    if use_tgi or use_both:
+        metric['GDA_CLIP'] = GDA_CLIP_TGI( cfg, val_features,val_labels,test_features,test_labels,clip_text_weights, clip_weights_cupl_all, matching_score,alpha_shift=False)
     else:
-        # use only tgi
-        clip_weights = clip_weights_cupl
+        acc_free = GDA_CLIP(cfg, val_features, val_labels, test_features, test_labels, clip_text_weights)
+        metric['GDA_CLIP'] = acc_free
+   
+    
+    # only run APE and TIMO if we are using the base run
+    if use_base:
+        # APE
+        acc_free = APE(cfg, cache_keys, cache_values, val_features, val_labels,  test_features, test_labels, clip_text_weights)
+        metric['APE'] = acc_free
 
-    acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels,  clip_weights, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True, timo_mode=timo_mode)
-    metric['TIMO'] = acc_free
+        # ------------------------------------------ Ours ------------------------------------------
+        # TIMO   
+
+        acc_free = TIMO(cfg, val_features, val_labels, test_features, test_labels, clip_weights_IGT, clip_weights_cupl_all, matching_score, grid_search=False, is_print=True)
+        metric['TIMO'] = acc_free
 
 
-    if timo_mode == 'both':
+    if timo_mode == 'base':
         run_name = 'original'
     else:
         run_name = timo_mode

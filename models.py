@@ -184,76 +184,100 @@ def GDA_CLIP(cfg, val_features, val_labels, test_features, test_labels, clip_wei
     return notune_acc
 
 
-def TIMO(cfg, val_features, val_labels, test_features, test_labels, clip_weights, clip_weights_all, matching_score, vecs_labels=None, grid_search=False, n_quick_search=-1, is_print=False, timo_mode="both"):
+def GDA_CLIP_TGI(cfg, val_features, val_labels, test_features, test_labels,clip_weights, clip_weights_all, matching_score, alpha_shift=False):
+    # GDA-CLIP fitted on support vectors plus similarity-weighted prompts.
+    with torch.no_grad():
+        vecs_v = torch.load( f"{cfg['cache_dir']}/{cfg['shots']}_vecs_f.pt", weights_only=False,).float()
 
-    if timo_mode not in {"tgi", "igt", "both"}:
-        raise ValueError(f"Invalid timo_mode: {timo_mode}. Choose 'tgi', 'igt', or 'both'.")
+        labels_v = torch.load( f"{cfg['cache_dir']}/{cfg['shots']}_labels_f.pt",  weights_only=False,).long()
 
-    igt_only = timo_mode == "igt"
+        vecs_t, weights = vec_sort(clip_weights_all.clone().float(),  matching_score)
+
+        classes, prompts, feature_dim = vecs_t.shape
+
+        weighted = (vecs_t * weights.unsqueeze(-1)).reshape(classes * prompts, feature_dim)
+
+        labels_t = torch.arange(classes).repeat_interleave(prompts)
+
+        weighted = weighted.to(device=vecs_v.device, dtype=vecs_v.dtype)
+        labels_t = labels_t.to(device=labels_v.device, dtype=labels_v.dtype)
+
+        vecs = torch.cat([vecs_v, weighted], dim=0)
+        labels = torch.cat([labels_v, labels_t], dim=0)
+
+        alpha, W, b, _ = GDA(  vecs, labels, clip_weights.float(), val_features, val_labels, alpha_shift=alpha_shift)
+
+        test_features = test_features.float()
+        clip_weights = clip_weights.float()
+
+        z = test_features @ clip_weights
+        g = test_features @ W + b
+
+        logits = (alpha * z + g if alpha_shift else 100.0 * z + alpha * g)
+
+        return cls_acc(logits, test_labels)
+    
+def TIMO(cfg, val_features, val_labels, test_features, test_labels, clip_weights, clip_weights_all, matching_score, vecs_labels=None, grid_search=False, n_quick_search=-1, is_print=False):
+    
     best_val_acc = 0
     best_alpha = 0.1
-    best_beta = None
-    best_weights = None
-
-    with torch.no_grad():
-        # Load image features and labels
+    
+    with torch.no_grad():  
+        # Image Vecs
         if vecs_labels is None:
-            vecs_v = torch.load(cfg["cache_dir"] + "/" + f"{cfg['shots']}_vecs_f.pt", weights_only=False).float()
-            labels_v = torch.load(cfg["cache_dir"] + "/" + f"{cfg['shots']}_labels_f.pt", weights_only=False).float()
+            vecs_v = torch.load(cfg['cache_dir'] + "/" + f"{cfg['shots']}_vecs_f.pt", weights_only=False).float()
+            labels_v = torch.load(cfg['cache_dir'] + "/" + f"{cfg['shots']}_labels_f.pt", weights_only=False).float()
         else:
             vecs_v, labels_v = vecs_labels[0], vecs_labels[1]
-
-        if igt_only:
-            # IGT-only: use image features only for GDA
-            alpha, W, b, val_acc = GDA(vecs_v, labels_v, clip_weights, val_features, val_labels, alpha_shift=True)
-            best_val_acc = val_acc
-            best_alpha = alpha
-            best_weights = [W.clone(), b.clone()]
-
-        else:
-            # TGI or both: include weighted text prompt features
-            vecs_t = clip_weights_all.clone().float()
-            vecs_t, weights = vec_sort(vecs_t, matching_score)
-            classes, prompt_num, _ = vecs_t.shape
-
-            if grid_search:
-                if n_quick_search != -1:
-                    beta_list = [int(beta) for beta in torch.linspace(1, prompt_num * 2, n_quick_search)]
-                else:
-                    beta_list = range(1, prompt_num * 2)
+        
+        vecs_t = clip_weights_all.clone().float() # c, n, d
+        vecs_t, weights = vec_sort(vecs_t, matching_score)
+        cate_num, prompt_num, _, = vecs_t.shape
+        vecs_c, labels_c = vecs_v, labels_v
+        
+        
+        if grid_search:
+            if n_quick_search != -1:
+                beta_list = [int(t) for t in torch.linspace(1, prompt_num*2, n_quick_search)]
             else:
-                beta_list = [prompt_num]
+                beta_list = range(1, prompt_num*2) 
+        else:
+            beta_list = [prompt_num]
+                
+           
+        for beta in beta_list:
+            beta = beta + 1 if beta == 0 else beta
+            
+            sliced_vecs_t = vecs_t.repeat(1,2,1)[:,:beta,:] # c, s, d
+            sliced_weights = weights.repeat(1,2)[:,:beta] # c, s
+                
+            # weight for instance based transfer
+            sliced_vecs_t = sliced_vecs_t * sliced_weights.unsqueeze(-1) 
+            
+            sliced_vecs_t = sliced_vecs_t.reshape(cate_num*beta, -1)
+            tmp = torch.tensor(range(cate_num)).unsqueeze(1).repeat(1, beta)
+            sliced_labels_t = tmp.flatten().to(sliced_vecs_t.device)
+            
+            # Instance based transfer
+            vecs_c = torch.cat([sliced_vecs_t, vecs_v])
+            labels_c = torch.cat([sliced_labels_t, labels_v])
 
-            for beta in beta_list:
-                if beta == 0:
-                    beta += 1
-
-                sliced_vecs_t = vecs_t.repeat(1, 2, 1)[:, :beta, :]
-                sliced_weights = weights.repeat(1, 2)[:, :beta]
-                sliced_vecs_t = sliced_vecs_t * sliced_weights.unsqueeze(-1)
-                sliced_vecs_t = sliced_vecs_t.reshape(classes * beta, -1)
-
-                sliced_labels_t = torch.arange(classes).unsqueeze(1).repeat(1, beta).flatten().to(sliced_vecs_t.device)
-
-                vecs_c = torch.cat([sliced_vecs_t, vecs_v])
-                labels_c = torch.cat([sliced_labels_t, labels_v])
-
-                alpha, W, b, val_acc = GDA(vecs_c, labels_c, clip_weights, val_features, val_labels, alpha_shift=True)
-
-                if val_acc > best_val_acc:
-                    best_val_acc = val_acc
-                    best_beta = beta
-                    best_alpha = alpha
-                    best_weights = [W.clone(), b.clone()]
-
-        # Evaluate on the test set
-        test_logits = best_alpha * test_features.float() @ clip_weights.float() + test_features.float() @ best_weights[0] + best_weights[1]
-        acc = cls_acc(test_logits, test_labels)
+            
+            alpha, W, b, val_acc = GDA(vecs_c, labels_c, clip_weights, val_features, val_labels, alpha_shift=True)
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_beta = beta
+                best_alpha = alpha
+                best_weights = [W.clone(), b.clone()]
+        
+        
+        alpha = best_alpha
+        test_logits = alpha * test_features.float() @ clip_weights.float() +   (test_features.float() @ best_weights[0] + best_weights[1]) 
+        acc = cls_acc(test_logits, test_labels)  
 
         if is_print:
             logger.info("best_val_alpha: %s\tbest_val_acc: %s", best_alpha, best_val_acc)
-            if not igt_only:
-                logger.info("best_beta: %s", best_beta)
+            logger.info("best_beta: %s", best_beta)
             logger.info("training-free acc: %s", acc)
             logger.info("")
 
