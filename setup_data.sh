@@ -1,57 +1,73 @@
 #!/usr/bin/env bash
-# Downloads and unpacks the datasets (Caltech101, DTD, Oxford Pets) into ../DATA,
-# one level above the repository, which is where the configs expect them.
 set -euo pipefail
 
-FILE_ID='1WoXpegQrOLPW8ndYbfumP4HMAB0d0WEq'
+
+
+FILE_ID='1eQozsqRSj8h8gPKtFsOc05shFKSTHakk'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="${DATA_DIR:-$SCRIPT_DIR/../DATA}"
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
-
 REQUIRED_DIRS=('caltech-101' 'dtd' 'oxford_pets')
 
 data_ready() {
     for d in "${REQUIRED_DIRS[@]}"; do
         [ -d "$DATA_DIR/$d" ] || return 1
     done
-    return 0
 }
 
 if data_ready; then
-    echo "Datasets already present in $DATA_DIR, nothing to do."
+    echo "Datasets already present in $DATA_DIR."
     exit 0
 fi
 
-command -v gdown >/dev/null 2>&1 || { echo 'gdown not found: activate the conda environment first.'; exit 1; }
-
-echo 'Downloading datasets...'
-gdown --id "$FILE_ID" -O "$TMP_DIR/data_archive"
-
-echo 'Unpacking...'
-mkdir -p "$TMP_DIR/unpacked"
-if tar -tf "$TMP_DIR/data_archive" >/dev/null 2>&1; then
-    tar -xf "$TMP_DIR/data_archive" -C "$TMP_DIR/unpacked"
-elif unzip -tq "$TMP_DIR/data_archive" >/dev/null 2>&1; then
-    unzip -q "$TMP_DIR/data_archive" -d "$TMP_DIR/unpacked"
-else
-    echo 'Downloaded file is neither tar nor zip. Is the Drive link public ("anyone with the link")?'
+command -v gdown >/dev/null 2>&1 || {
+    echo "gdown not found. Activate the conda environment first."
     exit 1
-fi
-
-# The archive may or may not have a wrapper folder: find the one containing caltech-101
-SRC="$(find "$TMP_DIR/unpacked" -maxdepth 3 -type d -name 'caltech-101' -printf '%h\n' | head -n 1)"
-if [ -z "$SRC" ]; then
-    echo 'caltech-101 not found inside the archive.'
-    exit 1
-fi
+}
 
 mkdir -p "$DATA_DIR"
-cp -r "$SRC"/. "$DATA_DIR"/
+
+# Use temporary storage on the same filesystem as the destination.
+TMP_DIR="$(mktemp -d -p "$DATA_DIR" .download.XXXXXX)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "Downloading data1.tar.gz..."
+gdown --id "$FILE_ID" -O "$TMP_DIR/data1.tar.gz"
+
+echo "Extracting archive..."
+mkdir -p "$TMP_DIR/unpacked"
+tar -xzf "$TMP_DIR/data1.tar.gz" -C "$TMP_DIR/unpacked"
+
+# Locate the extracted DATA directory, since the archive contains
+# the entire DATA folder rather than individual dataset folders.
+SRC="$(find "$TMP_DIR/unpacked" -maxdepth 4 -type d -name 'DATA' -print -quit)"
+
+# If the archive contains the dataset folders directly, use that directory.
+if [ -z "$SRC" ]; then
+    SRC="$TMP_DIR/unpacked"
+fi
+
+for d in "${REQUIRED_DIRS[@]}"; do
+    if [ ! -d "$SRC/$d" ]; then
+        echo "Error: Expected dataset directory '$d' not found in $SRC."
+        echo "Check the archive's internal directory structure."
+        exit 1
+    fi
+done
+
+echo "Moving datasets into $DATA_DIR..."
+for d in "${REQUIRED_DIRS[@]}"; do
+    if [ -d "$DATA_DIR/$d" ]; then
+        rm -rf "$DATA_DIR/$d"
+    fi
+    mv "$SRC/$d" "$DATA_DIR/$d"
+done
+
+# Move any loose files from the DATA folder, such as split JSON files.
+find "$SRC" -maxdepth 1 -type f -exec mv -t "$DATA_DIR" -- {} +
 
 if data_ready; then
-    echo "Done: datasets are in $DATA_DIR"
+    echo "Done! Datasets are available in $DATA_DIR."
 else
-    echo "Unpacked, but some of these are missing from $DATA_DIR: ${REQUIRED_DIRS[*]}"
+    echo "Error: Some dataset directories are missing."
     exit 1
 fi

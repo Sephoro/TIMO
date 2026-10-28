@@ -25,7 +25,7 @@ def get_arguments():
     parser.add_argument('--seed', dest='seed', type=int, default=1, help='seed')
     parser.add_argument('--dbg', dest='dbg', type=float, default=0, help='debug mode')
     parser.add_argument('--config', dest='config', help='settings of Tip-Adapter in yaml format')
-    parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both', 'base'], default='both', help='TIMO mode: TGI-only, IGT-only, or both')
+    parser.add_argument('--timo_mode', type=str, choices=['tgi', 'igt', 'both', 'base'], default='base', help='TIMO mode: TGI-only, IGT-only, or both')
     parser.add_argument('--junk', type=int, default=0, help='Number of cross-class junk prompts to inject per class')
 
     args = parser.parse_args()
@@ -45,7 +45,7 @@ def main():
     junk_prompts = args.junk
 
     if args.timo_mode == None:
-        timo_mode = 'both'
+        timo_mode = 'base'
 
     timo_mode = args.timo_mode
     logger.info("shots", cfg['shots'])
@@ -178,7 +178,7 @@ def main():
     if junk_prompts > 0:
         run_name = f'{run_name}_junk{junk_prompts}'
 
-    save_log(cfg, metric, run_name=run_name)
+    save_log(cfg, metric, run_name="test")
 
 
     
