@@ -49,7 +49,7 @@ includes `gdown`, which the data script uses.
 ## Data
 
 The experiments use Caltech101, DTD and Oxford-IIIT Pets, with the CoOp train/val/test
-split files. We host one archive [`data.tar.gz`](https://drive.google.com/file/d/1WoXpegQrOLPW8ndYbfumP4HMAB0d0WEq/view?usp=drive_link) containing the three datasets and their
+split files. We host one archive [`data1.tar.gz`](https://drive.google.com/file/d/1eQozsqRSj8h8gPKtFsOc05shFKSTHakk/view?usp=drive_link) containing the three datasets and their
 splits, already arranged as the code expects.
 
 **Disk space.** About 6.9 GB for the archive and 7.1 GB once extracted, plus space for the
@@ -350,20 +350,43 @@ It writes the following files to `analysis/junk_prompt/`:
 
 ### Numerical Results
 
-We provide TIMO's **numerical results** at [TIMO.txt](https://github.com/lyymuwu/TIMO/blob/main/outputs/TIMO.txt)
-and [TIMO_S.txt](https://github.com/lyymuwu/TIMO/blob/main/outputs/TIMO_S.txt).
+We provide the numerical results for base, ablation and junk prompt under output/archive for reference
+
+### Run the Complete Pipeline
+
+Execute:
+
+```bash
+bash run-all.sh
+```
+
+The script performs the following stages in order:
+
+1. **Dataset setup:** Prepares the datasets required for the experiments.
+2. **Feature extraction:** Extracts and caches the CLIP image and text features.
+3. **Baseline experiments:** Runs the baseline configuration.
+4. **TGI experiments:** Evaluates Text-Guided-Image.
+5. **IGT experiments:** Evaluates Image-Guided-Text.
+6. **Combined experiments:** Evaluates the combination of TGI and IGT.
+7. **Junk-prompt experiments:** Evaluates robustness to additional incorrect-class prompts using 2, 4, 8, 16, and 32 junk prompts.
+8. **Analysis:** Processes the experiment logs and generates summary tables for the baseline, ablation, and junk-prompt experiments.
+
+The experiments cover all three datasets, three shot counts, and three random seeds. Feature extraction is performed separately so cached features can be reused across experiment modes.
+
+> **Note:** The full pipeline may take several hours, depending on the hardware and whether feature extraction has already been completed.
+
+### Resuming an Interrupted Run
+
+The pipeline records completed stages in `.pipeline_state/`. If a stage fails, fix the underlying problem and run the script again:
+
+```bash
+bash run-all.sh
+```
+
+Stages with completion markers are skipped, allowing the pipeline to resume without repeating every completed stage.
+
+> **Note:** The completion markers are local pipeline state, not experiment results. To rerun a completed stage, remove its corresponding marker from `.pipeline_state/` before running the script again. Be aware that rerunning experiments may append duplicate entries to existing logs, depending on the logging implementation.
 
 ## Acknowledgements
 
 This repo is build upon previous amazing repos include [TIP-Adapter](https://github.com/gaopengcuhk/Tip-Adapter/), [CLIP](https://github.com/openai/CLIP), [CoOp](https://github.com/KaiyangZhou/CoOp/), [SuS-X](https://github.com/vishaal27/SuS-X), [CuPL](https://github.com/sarahpratt/CuPL) [APE](https://github.com/yangyangyang127/APE) and [GDA-CLIP](https://github.com/mrflogs/ICLR24). Thanks for their contributions to the field.
-
-## Citation
-
-```
-@article{Li_2024_Text,
-  title={Text and Image Are Mutually Beneficial: Enhancing Training-Free Few-Shot Classification with CLIP},
-  author={Li, Yayuan and Guo, Jintao and Qi, Lei and Li, Wenbin and Shi, Yinghuan},
-  journal={arXiv preprint arXiv:2412.11375},
-  year={2024}
-}
-```
