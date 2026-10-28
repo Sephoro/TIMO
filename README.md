@@ -4,30 +4,49 @@
 
 # TIMO ablation: a reduced-scale reproduction
 
-This repository reproduces one claim from *Text and Image Are Mutually Beneficial:
-Enhancing Training-Free Few-Shot Classification with CLIP* (Li et al., AAAI 2025,
-[arXiv:2412.11375](https://arxiv.org/abs/2412.11375)).
+This repository reproduces one claim from *Text and Image Are Mutually Beneficial: Enhancing Training-Free Few-Shot Classification with CLIP* (Li et al., AAAI 2025, [arXiv:2412.11375](https://arxiv.org/abs/2412.11375)).
 
-**Claim tested.** The paper's ablation (Table 3) reports that adding Text-Guided-Image
-(TGI), Image-Guided-Text (IGT), or both to a base classifier (GDA-CLIP, and also
-Tip-Adapter) improves few-shot accuracy, and that both together improve it further.
+**Claim tested.** The paper's ablation (Table 3) reports that adding Text-Guided-Image (TGI), Image-Guided-Text (IGT), or both to a base classifier (GDA-CLIP, and also Tip-Adapter) improves few-shot accuracy, and that both together improve it further.
 
-**Scale.** CLIP RN50, three of the paper's eleven datasets (Caltech101, DTD, Oxford-IIIT
-Pets), 1, 4 and 16 shots per class, seeds 1, 2 and 3. All results were produced on CPU.
-TIMO-S and the other backbones are not evaluated.
+**Scale.** CLIP RN50, three of the paper's eleven datasets (Caltech101, DTD, Oxford-IIIT Pets), 1, 4 and 16 shots per class, seeds 1, 2 and 3. All results were produced on CPU. TIMO-S and the other backbones are not evaluated.
 
-**What is ours.** The code builds on the authors' implementation
-(<https://github.com/lyymuwu/TIMO>). We patched it to run on CPU, added a `--timo_mode`
-flag (`base`, `tgi`, `igt`, `both`) that applies each component to Tip-Adapter and
-GDA-CLIP, and added a wrong-class prompt-injection experiment (`--junk`) that the paper
-does not report. The authors' `TIMO` function is left unmodified and run as a reference row.
-The extension of TGI to Tip-Adapter is our own construction and has not been validated
-against the authors' code.
+**What is ours.** The code builds on the authors' implementation (<https://github.com/lyymuwu/TIMO>). We patched it to run on CPU, added a `--timo_mode` flag (`base`, `tgi`, `igt`, `both`) that applies each component to Tip-Adapter and GDA-CLIP, and added a wrong-class prompt-injection experiment (`--junk`) that the paper does not report. The authors' `TIMO` function is left unmodified and run as a reference row. The extension of TGI to Tip-Adapter is our own construction and has not been validated against the authors' code.
 
-## Getting the code
+---
 
-Run everything from the repository root. The code expects the datasets in `../DATA` (Setup in the next section), one
-level above the repository, so create a workspace folder first:
+<a id="quick-start"></a>
+## Quick start
+
+```bash
+mkdir timo-workspace && cd timo-workspace
+git clone https://github.com/Sephoro/TIMO.git && cd TIMO
+conda create -n TIMO python=3.8 -y && conda activate TIMO
+python -m pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
+bash run-all.sh      # data, features, all experiments, analysis (several hours)
+```
+
+Run everything from the repository root. The code expects the datasets in `../DATA`, one level above the repository, which is why the clone goes inside a workspace folder. See [Run the Complete Pipeline](#complete) for details.
+
+If the quick start worked, skim [Environment](#env-setting) and [Data](#data) to confirm your setup matches, then jump to [Model Inference](#inference) and [Results and Analysis](#results). You can re-run individual ablation settings later via [Running the Full Experiment Suite](#full-suite).
+
+<a id="requirements"></a>
+## Requirements
+
+| | |
+|---|---|
+| System | Linux, conda. No GPU needed. |
+| Disk | Datasets 7.1 GB extracted (6.9 GB archive, deleted after extraction). Feature cache 0.8 GB archive, ~2 GB extracted. |
+| Time | Feature extraction ~4 hours on an 8-thread laptop CPU. Inference and analysis ~6 hours. |
+
+---
+
+<a id="setup"></a>
+## Setup: step by step
+
+Use this section if the quick start failed, timed out, or you prefer to run and inspect each stage individually. Most steps are covered by [Quick start](#quick-start).
+
+<a id="getting-the-code"></a>
+### Getting the code
 
 ```bash
 mkdir timo-workspace && cd timo-workspace
@@ -35,7 +54,8 @@ git clone https://github.com/Sephoro/TIMO.git
 cd TIMO
 ```
 
-## Environment
+<a id="env-setting"></a>
+### Environment
 
 ```bash
 conda create -n TIMO python=3.8
@@ -43,30 +63,26 @@ conda activate TIMO
 python -m pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 ```
 
-The results in the report were produced on CPU (no GPU is needed). `requirements.txt`
-includes `gdown`, which the data script uses.
+The results in the report were produced on CPU (no GPU is needed). `requirements.txt` includes `gdown`, which the data script uses.
 
-## Data
+<a id="data"></a>
+### Data
 
-The experiments use Caltech101, DTD and Oxford-IIIT Pets, with the CoOp train/val/test
-split files. We host one archive [`data1.tar.gz`](https://drive.google.com/file/d/1eQozsqRSj8h8gPKtFsOc05shFKSTHakk/view?usp=drive_link) containing the three datasets and their
-splits, already arranged as the code expects.
+The experiments use Caltech101, DTD and Oxford-IIIT Pets, with the CoOp train/val/test split files. We host one archive [`data1.tar.gz`](https://drive.google.com/file/d/1eQozsqRSj8h8gPKtFsOc05shFKSTHakk/view?usp=drive_link) containing the three datasets and their splits, already arranged as the code expects.
 
-**Disk space.** About 6.9 GB for the archive and 7.1 GB once extracted, plus space for the
-environment and feature caches. Free up space before you start.
+**Disk space.** About 6.9 GB for the archive and 7.1 GB once extracted, plus space for the environment and feature caches. Free up space before you start.
 
-### Option 1: script (recommended)
+#### Option 1: script (recommended)
 
 ```bash
 bash setup_data.sh
 ```
 
-This downloads the archive, extracts it into `../DATA`, and removes the archive. If
-`../DATA` already holds the three datasets it does nothing. If this process fails, follow option 2 instruction to download the dataset.
+This downloads the archive, extracts it into `../DATA`, and removes the archive. If `../DATA` already holds the three datasets it does nothing. If this fails, follow Option 2 below.
 
-### Option 2: manual (Incase of failure in option 1, Skip if option 1 worked)
+#### Option 2: manual (skip if Option 1 worked)
 
-Use this if the script fails (for example a Google Drive download quota or lack of space).
+Use this if the script fails (for example, a Google Drive download quota or lack of space).
 
 ```bash
 mkdir -p ../DATA
@@ -75,93 +91,72 @@ tar -xzf data1.tar.gz --strip-components=1 -C ../DATA
 rm data1.tar.gz
 ```
 
-You can also download `data.tar.gz` through a browser from the same link, and run the
-`tar` and `rm` lines. If extraction creates `../DATA/DATA/...`, redo it with
-`tar -xzf data.tar.gz -C ../DATA --strip-components=1`.
+You can also download `data1.tar.gz` through a browser from the same link, then run the `tar` and `rm` lines. If extraction creates `../DATA/DATA/...`, redo it with `tar -xzf data1.tar.gz -C ../DATA --strip-components=1`.
 
-### Check the layout
+#### Check the layout
 
 ```bash
 ls ../DATA
 ```
 
-The expected contents are `caltech-101`, `dtd` and `oxford_pets`, and each contains its
-split JSON (for example `caltech-101/split_zhou_Caltech101.json`).
+Expected contents: `caltech-101`, `dtd`, `oxford_pets`, each containing its split JSON (for example `caltech-101/split_zhou_Caltech101.json`).
 
-### Using the original sources
+#### Using the original sources
 
-The archive is a convenience copy. The datasets belong to their original authors and keep
-their own licences. To build the data from the originals, follow the instructions used by
-Tip-Adapter and CoOp:
-<https://github.com/gaopengcuhk/Tip-Adapter/blob/main/DATASET.md>
+The archive is a convenience copy. The datasets belong to their original authors and keep their own licences. To build from the originals, follow the Tip-Adapter / CoOp instructions: <https://github.com/gaopengcuhk/Tip-Adapter/blob/main/DATASET.md>
 
-### Configs
+#### Configs
 
-The running configurations can be modified in `configs/dataset.yaml`, user need to modify the root_path in configurations to the folder where dataset resides.
+The running configurations live in `configs/<dataset>.yaml`. Edit the `root_path` field to point to where the dataset resides on your machine.
 
-Notes, `data_path` in `extract_features_all.py` need to be modified as well.
+**Note:** `data_path` in `extract_features_all.py` must be updated to match as well.
 
-### Extracting Features
+<a id="features"></a>
+### Extracting features
 
-Feature extraction and model inference are separate steps. Features are extracted once
-and cached, and every later experiment reads from the cache.
-
-Extract all image and text features with:
+Feature extraction and model inference are separate steps. Features are extracted once and cached; every later experiment reads from the cache.
 
 ```bash
 python extract_features_all.py
 ```
 
-This extracts CLIP RN50 features for Caltech101, DTD and Oxford-IIIT Pets, with shots
-1, 4 and 16 and seeds 1, 2 and 3, and writes them to `caches/RN50/<seed>/<dataset>/`.
-The seed decides which support images are sampled, so the few-shot features differ per
-seed. Each support image is encoded under ten random-crop and flip augmentations.
+This extracts CLIP RN50 features for Caltech101, DTD and Oxford-IIIT Pets, with shots 1, 4 and 16 and seeds 1, 2 and 3, writing them to `caches/RN50/<seed>/<dataset>/`. The seed determines which support images are sampled, so few-shot features differ per seed. Each support image is encoded under ten random-crop and flip augmentations.
 
-**Runtime and device.** This step is by far the slowest. On an 8-thread laptop CPU it took
-about 4 hours. It runs on CPU by default, which is the setting the reported results come
-from. To use a GPU, run `CUDA_VISIBLE_DEVICES=0 python extract_features_all.py`; feature
-values may differ slightly from the CPU ones. To run a smaller subset, edit `seeds`,
-`datasets` and `k_shot` at the bottom of `extract_features_all.py`.
+**Runtime and device.** This is the slowest step by far: about 4 hours on an 8-thread laptop CPU. It runs on CPU by default, which is the setting the reported results come from. To use a GPU: `CUDA_VISIBLE_DEVICES=0 python extract_features_all.py` (feature values may differ slightly). To run a smaller subset, edit `seeds`, `datasets` and `k_shot` at the bottom of `extract_features_all.py`.
 
-### Skipping extraction with the pre-computed cache
+#### Skipping extraction with the pre-computed cache
 
-If extraction takes too long, download the cache we generated from the three datasources being Caltech101, DTD and Oxford-IIIT Pets using seeds 1, 2 and 3 under k-shots 1, 4 and 16:
-<https://drive.google.com/file/d/10HY1IybNdYOUj7xv9O09DXmefMjAEJ-7/view>
+If extraction takes too long, download the cache we generated for all three datasets, seeds 1/2/3, k-shots 1/4/16: <https://drive.google.com/file/d/10HY1IybNdYOUj7xv9O09DXmefMjAEJ-7/view>
 
 ```bash
 gdown --fuzzy "https://drive.google.com/file/d/10HY1IybNdYOUj7xv9O09DXmefMjAEJ-7/view" -O caches.tar.gz
 tar -xzf caches.tar.gz            # run from the repository root
 rm caches.tar.gz
-ls caches/RN50  # expect: 1  2  3
-rm caches.tar.gz
-                   
+ls caches/RN50                    # expect: 1  2  3
 ```
 
-The archive must unpack to a folder named `caches/` in the repository root, because the
-code reads `./caches/RN50/<seed>/<dataset>/`. Size: about 0.8GB GB archive, X GB extracted.
-`run_all.sh` skips extraction when the cache is present.
+The archive must unpack to a folder named `caches/` in the repository root, because the code reads `./caches/RN50/<seed>/<dataset>/`. Size: ~0.8 GB archive, ~2 GB extracted. `run-all.sh` skips extraction when the cache is present.
 
-### Model Inference
+---
+
+<a id="inference"></a>
+## Model inference
 
 All experiments should be run from the repository root after preparing the datasets and extracting the required features.
 
-#### Base Configuration (Original Authors' Settings)
-
-To reproduce the baseline results under the original authors' settings:
+### Base configuration (original authors' settings)
 
 ```bash
-python main.py --config configs/[dataset_name].yaml --shot [shot_number] --seed [seed_number]
+python main.py --config configs/<dataset_name>.yaml --shot <shot_number> --seed <seed_number>
 ```
 
-- `dataset_name`: one of `caltech101`, `dtd`, or `oxford_pets`
-- `shot_number`: number of training examples per class (`1`, `4`, or `16`)
-- `seed_number`: random seed (any integer, as long as corresponding features have been extracted)
+- `dataset_name`: one of `caltech101`, `dtd`, `oxford_pets`
+- `shot_number`: training examples per class (`1`, `4`, or `16`)
+- `seed_number`: random seed (any integer, as long as the corresponding features have been extracted)
 
-**Note:** When run without additional arguments, `--timo_mode` defaults to `base` and `--junk` defaults to `0`. This configuration matches the original authors' experimental setup, running the baseline implementations (Tip-Adapter, APE, GDA-CLIP) without our TGI/IGT ablation modifications. The authors' original TIMO implementation is retained as a reference.
+**Note:** Without additional arguments, `--timo_mode` defaults to `base` and `--junk` defaults to `0`. This matches the original authors' setup: it runs the baseline implementations (Tip-Adapter, APE, GDA-CLIP) without TGI/IGT modifications. The authors' original `TIMO` function is retained as a reference row.
 
-#### Single Experiment with Custom Settings
-
-To evaluate a specific configuration with custom ablation modes or junk injection:
+### Single experiment with custom settings
 
 ```bash
 python main.py \
@@ -174,30 +169,28 @@ python main.py \
 
 **Arguments:**
 
-- `--config`: Dataset configuration (`caltech101`, `dtd`, or `oxford_pets`)
-- `--shot`: Training examples per class (`1`, `4`, or `16`)
-- `--seed`: Random seed (`1`, `2`, or `3`)
-- `--timo_mode`: Ablation mode (see table below, default `base`)
-- `--junk`: Number of junk prompts to inject (default `0`)
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--config` | Dataset config (`caltech101`, `dtd`, `oxford_pets`) | — |
+| `--shot` | Training examples per class (`1`, `4`, `16`) | `1` |
+| `--seed` | Random seed (`1`, `2`, `3`) | `1` |
+| `--timo_mode` | Ablation mode (see table below) | `base` |
+| `--junk` | Number of junk prompts to inject | `0` |
 
-#### Ablation Modes
-
-The `--timo_mode` argument controls which components are enabled:
+### Ablation modes
 
 | Mode | Description |
-| ------ | ------------- |
+|------|-------------|
 | `base` | Baseline implementations (default) |
 | `tgi` | Text-Guided-Image component only |
 | `igt` | Image-Guided-Text component only |
 | `both` | Combined TGI and IGT components |
 
-When timo_mode in `base`, `igt` or `tgi`, the ablation only affects Tip-Adapter and GDA-CLIP, this assuming that the model is already under base conditions configuration for base results. More on how to run end-to-end in the coming sections
+When `--timo_mode` is `base`, `tgi`, or `igt`, the ablation affects Tip-Adapter and GDA-CLIP only. The `base` run establishes the reference numbers; the other modes layer one or both components on top. See [Running the Full Experiment Suite](#full-suite) for end-to-end commands.
 
-#### Junk-Prompt Injection
+### Junk-prompt injection
 
-The `--junk` argument injects irrelevant prompts from incorrect classes to test robustness. A value of `0` disables injection (default). Our experiments evaluate `2`, `4`, `8`, `16`, and `32` junk prompts.
-
-Example with junk injection:
+`--junk` injects irrelevant prompts drawn from incorrect classes to test robustness. A value of `0` disables injection (default). Our experiments evaluate 2, 4, 8, 16, and 32 junk prompts.
 
 ```bash
 python main.py \
@@ -207,186 +200,183 @@ python main.py \
     --junk 8
 ```
 
-### Running the Full Experiment Suite
+---
 
-To reproduce the experiments, run the commands below from the repository root. Each command evaluates all three datasets, shot settings (1, 4, and 16), and random seeds (1, 2, and 3).
+<a id="full-suite"></a>
+## Running the full experiment suite
 
-#### Baseline
+Each command below evaluates all three datasets, shot settings (1, 4, 16), and seeds (1, 2, 3).
 
-Run the baseline implementations without the additional TGI/IGT ablations or junk prompts:
+### Baseline
 
 ```bash
 bash run.sh
 ```
 
-##### TGI Ablation
-
-Evaluate the Text-Guided-Image (TGI) component for Tip-Adapter and GDA-CLIP :
+### TGI ablation
 
 ```bash
 bash run.sh tgi
 ```
 
-##### IGT Ablation
-
-Evaluate the Image-Guided-Text (IGT) component for Tip-Adapter and GDA-CLIP:
+### IGT ablation
 
 ```bash
 bash run.sh igt
 ```
 
-##### Combined TGI and IGT
-
-Evaluate both components together, TIMO used in Tip-Adapter and GDA-CLIP:
+### Combined TGI + IGT
 
 ```bash
 bash run.sh both
 ```
 
-#### Junk-Prompt Robustness Experiments
+### Junk-prompt robustness
 
-Evaluate robustness to irrelevant prompts using 2, 4, 8, 16, and 32 additional junk prompts:
+All five noise levels (2, 4, 8, 16, 32) in one go:
 
 ```bash
 bash run.sh --all-noise
 ```
 
-To run the junk-prompt experiments with a specific ablation, replace `base` with `tgi`, `igt`, or `both`. For example:
+With a specific ablation mode:
 
 ```bash
 bash run.sh both --all-noise
 ```
 
-To test a single junk-prompt setting, use `--noise` followed by the desired number:
+A single noise level:
 
 ```bash
 bash run.sh base --noise 8
 ```
 
-**Note:** The junk-prompt experiments extend the original paper and are not part of its reported experiments.
+**Note:** The junk-prompt experiments extend the original paper and are not part of its reported results.
 
-### Results and Analysis
+---
 
-All experiment runs write their raw results to the `outputs/` folder in the repository root. Each run mode gets its own subfolder, and within each subfolder there is one `.txt` file per logged metric.
+<a id="results"></a>
+## Results and analysis
 
-```
+All runs write raw results to `outputs/` in the repository root. Each mode gets its own subfolder with one `.txt` file per metric.
+
+```text
 outputs/
-├── original/                 # clean baseline run (no junk, base mode)
+├── original/                 # clean baseline (no junk, base mode)
 │   ├── APE.txt
 │   ├── GDA_CLIP.txt
 │   ├── TIMO.txt
 │   └── Tip_Adapter.txt
 ├── tgi/                      # TGI-only ablation
 ├── igt/                      # IGT-only ablation
-├── both/                     # combined TGI + IGT ablation
-├── junk_2/                   # baseline + 2 junk prompts
-├── junk_4/                   # baseline + 4 junk prompts
-└── ...                       # junk_8, junk_16, junk_32
+├── both/                     # combined TGI + IGT
+├── original_junk2/           # baseline + 2 junk prompts
+├── original_junk4/           # baseline + 4 junk prompts
+└── ...                       # original_junk8, original_junk16, original_junk32
 ```
 
-Each `.txt` file stores one line per experiment in the format:
+Each `.txt` file stores one line per experiment:
 
-```
+```text
 dataset_shots_seed: score
 ```
 
-#### Generating CSV tables
+### Generating CSV tables
 
-The raw logs are hard to read, so use `analyse.py` to convert them into organised CSV tables. Run it from the repository root:
+Use `analyse.py` to convert the raw logs into organised CSVs:
 
 ```bash
 python analyse.py --mode base
 ```
 
-This reads `outputs/base/`, aggregates the results across seeds, and writes a set of CSV files to `analysis/base/`. You can also specify a different results root if needed:
+This reads `outputs/original/`, aggregates across seeds, and writes CSVs to `outputs/analysis/base/`. Specify a different root with `--root`:
 
 ```bash
 python analyse.py --mode base --root outputs
 ```
 
-#### Ablation analysis (`--mode base|tgi|igt|both`)
+### Ablation analysis (`--mode base|tgi|igt|both`)
 
-For each of the four ablation modes, `analyse.py` produces the following files inside `analysis/<mode>/`:
+Produces the following files inside `outputs/analysis/<mode>/`:
 
 | File | Contents |
-| ------ | ---------- |
+|------|----------|
 | `all_results.csv` | One row per experiment, one column per method. |
-| `summary_by_dataset_shots.csv` | Mean and standard deviation across seeds, per dataset and shot count. |
-| `method_comparison.csv` | Mean score per method, with the best method flagged. |
+| `summary_by_dataset_shots.csv` | Mean ± std across seeds, per dataset and shot count. |
+| `method_comparison.csv` | Mean score per method, best method flagged. |
 | `overall_method_ranking.csv` | Overall mean accuracy and spread per method. |
-
-Example:
 
 ```bash
 python analyse.py --mode both
 ```
 
-#### Junk-prompt analysis (`--mode junk`)
+### Junk-prompt analysis (`--mode junk`)
 
-This mode compares every junk-prompt run against the clean baseline and computes how much accuracy each method loses as noise increases.
+Compares every junk run against the clean baseline and computes accuracy drop per method.
 
 ```bash
 python analyse.py --mode junk
 ```
 
-To run for a specific noise level you add the `--noise-levels` flag. It can take more than one noise level, example you can have it as `--noise-levels 2` for 2 or `--noise-levels 2 16` for 2 and 16
+Limit to specific noise levels with `--noise-levels` (accepts one or more integers):
 
 ```bash
 python analyse.py --mode junk --noise-levels 2 16
 ```
 
-It writes the following files to `analysis/junk_prompt/`:
+Writes to `outputs/analysis/junk_prompt/`:
 
 | File | Contents |
-| ------ | ---------- |
-| `noise_degradation.csv` | Every noisy run matched to its clean baseline, with the accuracy drop. |
-| `method_robustness_summary.csv` | Mean drop and relative drop per method and noise level. |
-| `degradation_by_dataset_shots.csv` | Breakdown of the drop by dataset, shot count, and noise level. |
+|------|----------|
+| `noise_degradation.csv` | Every noisy run matched to its clean baseline, with the drop. |
+| `method_robustness_summary.csv` | Mean and relative drop per method and noise level. |
+| `degradation_by_dataset_shots.csv` | Breakdown by dataset, shot count, and noise level. |
 | `timo_shot_sensitivity.csv` | TIMO accuracy drop by noise level and shot count. |
-| `timo_most_affected_shots.csv` | The shot setting with the largest drop at each noise level. |
-| `junk_weight_analysis.csv` | Raw junk-weight logs exported for inspection. |
+| `timo_most_affected_shots.csv` | Shot setting with the largest drop at each noise level. |
+| `junk_weight_analysis.csv` | Raw junk-weight logs for inspection. |
 
-**Note:** The junk-prompt analysis assumes the clean baseline lives in `outputs/original/`. Make sure you have run the clean baseline (`bash run.sh base`) before running `--mode junk`.
+**Note:** Junk analysis assumes the clean baseline lives in `outputs/original/`. Run `bash run.sh` (base mode) first.
 
-### Numerical Results
+### Numerical results
 
-We provide the numerical results for base, ablation and junk prompt under output/archive for reference
+Pre-computed CSVs for base, ablation, and junk-prompt runs are provided under `outputs/archive/` for reference.
 
-### Run the Complete Pipeline
+---
 
-Execute:
-
-```bash
-bash run-all.sh
-```
-
-The script performs the following stages in order:
-
-1. **Dataset setup:** Prepares the datasets required for the experiments.
-2. **Feature extraction:** Extracts and caches the CLIP image and text features.
-3. **Baseline experiments:** Runs the baseline configuration.
-4. **TGI experiments:** Evaluates Text-Guided-Image.
-5. **IGT experiments:** Evaluates Image-Guided-Text.
-6. **Combined experiments:** Evaluates the combination of TGI and IGT.
-7. **Junk-prompt experiments:** Evaluates robustness to additional incorrect-class prompts using 2, 4, 8, 16, and 32 junk prompts.
-8. **Analysis:** Processes the experiment logs and generates summary tables for the baseline, ablation, and junk-prompt experiments.
-
-The experiments cover all three datasets, three shot counts, and three random seeds. Feature extraction is performed separately so cached features can be reused across experiment modes.
-
-> **Note:** The full pipeline may take several hours, depending on the hardware and whether feature extraction has already been completed.
-
-### Resuming an Interrupted Run
-
-The pipeline records completed stages in `.pipeline_state/`. If a stage fails, fix the underlying problem and run the script again:
+<a id="complete"></a>
+## Run the complete pipeline
 
 ```bash
 bash run-all.sh
 ```
 
-Stages with completion markers are skipped, allowing the pipeline to resume without repeating every completed stage.
+Stages, in order:
 
-> **Note:** The completion markers are local pipeline state, not experiment results. To rerun a completed stage, remove its corresponding marker from `.pipeline_state/` before running the script again. Be aware that rerunning experiments may append duplicate entries to existing logs, depending on the logging implementation.
+1. **Dataset setup** — downloads and extracts the three datasets.
+2. **Feature extraction** — caches CLIP RN50 image and text features (skipped if `caches/` is present).
+3. **Baseline experiments** — `run.sh base`.
+4. **TGI experiments** — `run.sh tgi`.
+5. **IGT experiments** — `run.sh igt`.
+6. **Combined experiments** — `run.sh both`.
+7. **Junk-prompt experiments** — `run.sh base --all-noise`.
+8. **Analysis** — `analyse.py` for every mode and the junk comparison.
+
+Experiments cover all three datasets, three shot counts, and three seeds. Feature extraction is a separate step so cached features are reused across modes.
+
+> **Note:** The full pipeline may take several hours depending on hardware and whether features are already cached.
+
+### Resuming an interrupted run
+
+The pipeline records completed stages in `.pipeline_state/`. If a stage fails, fix the problem and re-run:
+
+```bash
+bash run-all.sh
+```
+
+Stages with a completion marker are skipped. To force a re-run, delete the corresponding `.done` file from `.pipeline_state/` first. Be aware that re-running experiments appends to existing logs, which may produce duplicate entries.
+
+---
 
 ## Acknowledgements
 
-This repo is build upon previous amazing repos include [TIP-Adapter](https://github.com/gaopengcuhk/Tip-Adapter/), [CLIP](https://github.com/openai/CLIP), [CoOp](https://github.com/KaiyangZhou/CoOp/), [SuS-X](https://github.com/vishaal27/SuS-X), [CuPL](https://github.com/sarahpratt/CuPL) [APE](https://github.com/yangyangyang127/APE) and [GDA-CLIP](https://github.com/mrflogs/ICLR24). Thanks for their contributions to the field.
+This repo is built upon previous work including [TIP-Adapter](https://github.com/gaopengcuhk/Tip-Adapter/), [CLIP](https://github.com/openai/CLIP), [CoOp](https://github.com/KaiyangZhou/CoOp/), [SuS-X](https://github.com/vishaal27/SuS-X), [CuPL](https://github.com/sarahpratt/CuPL), [APE](https://github.com/yangyangyang127/APE), and [GDA-CLIP](https://github.com/mrflogs/ICLR24). Thanks for their contributions to the field.
