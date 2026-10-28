@@ -9,9 +9,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
 DATA_SCRIPT="${DATA_SCRIPT:-$REPO_ROOT/setup_data.sh}"
-FEATURE_SCRIPT="${FEATURE_SCRIPT:-$REPO_ROOT/extract_features.sh}"
+FEATURE_SCRIPT="${FEATURE_SCRIPT:-$REPO_ROOT/extract-feature.sh}"
 EXPERIMENT_SCRIPT="${EXPERIMENT_SCRIPT:-$REPO_ROOT/run.sh}"
-ANALYSIS_SCRIPT="${ANALYSIS_SCRIPT:-$REPO_ROOT/analyse_results.py}"
+ANALYSIS_SCRIPT="${ANALYSIS_SCRIPT:-$REPO_ROOT/analyse.py}"
 
 STATE_DIR="$REPO_ROOT/.pipeline_state"
 mkdir -p "$STATE_DIR"
