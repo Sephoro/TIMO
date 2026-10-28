@@ -15,3 +15,5 @@ Analyze.py
 test.py
 outputs/analysis/
 *.csv
+.pipeline_state/
+.done
