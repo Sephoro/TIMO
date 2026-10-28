@@ -107,7 +107,7 @@ The archive is a convenience copy. The datasets belong to their original authors
 
 #### Configs
 
-The running configurations live in `configs/<dataset>.yaml`. Edit the `root_path` field to point to where the dataset resides on your machine.
+The running configurations live in `configs/<dataset>.yaml`. If you downloaded the data elsewhere, edit the `root_path` field to point to where the dataset resides on your machine.
 
 **Note:** `data_path` in `extract_features_all.py` must be updated to match as well.
 
