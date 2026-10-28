@@ -1,25 +1,33 @@
 #!/bin/bash
 
-TIMO_MODE="${1:-both}"
+# Defaults
+TIMO_MODE="base"
 NOISE=0
 
-if [[ ! "$TIMO_MODE" =~ ^(tgi|igt|both)$ ]]; then
-    echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
-    exit 1
+# Optional mode argument
+if [[ $# -ge 1 && "$1" != "--noise" ]]; then
+    TIMO_MODE="$1"
+fi
+
+# Validate mode
+if [[ ! "$TIMO_MODE" =~ ^(base|tgi|igt|both)$ ]]; then
+    echo "Invalid mode '$TIMO_MODE'. Using 'base' instead."
+    TIMO_MODE="base"
 fi
 
 # Optional noise flag
 if [[ "${2:-}" == "--noise" ]]; then
-    NOISE="${3:-}"
-
-    if [[ ! "$NOISE" =~ ^[0-9]+$ ]] || [[ $# -ne 3 ]]; then
-        echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
-        echo "NUMBER must be a non-negative integer."
-        exit 1
+    if [[ "${3:-}" =~ ^[0-9]+$ ]]; then
+        NOISE="$3"
+    else
+        echo "Invalid or missing noise value. Using 0."
     fi
-elif [[ $# -gt 1 ]]; then
-    echo "Usage: $0 {tgi|igt|both} [--noise NUMBER]"
-    exit 1
+elif [[ "${1:-}" == "--noise" ]]; then
+    if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
+        NOISE="$2"
+    else
+        echo "Invalid or missing noise value. Using 0."
+    fi
 fi
 
 for DATA in caltech101 dtd oxford_pets
