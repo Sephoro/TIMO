@@ -178,7 +178,7 @@ def main():
     if junk_prompts > 0:
         run_name = f'{run_name}_junk{junk_prompts}'
 
-    save_log(cfg, metric, run_name="test")
+    save_log(cfg, metric, run_name=run_name")
 
 
     
