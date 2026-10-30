@@ -118,7 +118,7 @@ The seed decides which support images are sampled, so the few-shot features diff
 seed. Each support image is encoded under ten random-crop and flip augmentations.
 
 **Runtime and device.** This step is by far the slowest. On an 8-thread laptop CPU it took
-about 4 hours. It runs on CPU by default, which is the setting the reported results come
+about 12 hours. It runs on CPU by default, which is the setting the reported results come
 from. To use a GPU, run `CUDA_VISIBLE_DEVICES=0 python extract_features_all.py`; feature
 values may differ slightly from the CPU ones. To run a smaller subset, edit `seeds`,
 `datasets` and `k_shot` at the bottom of `extract_features_all.py`.
@@ -373,7 +373,7 @@ The script performs the following stages in order:
 
 The experiments cover all three datasets, three shot counts, and three random seeds. Feature extraction is performed separately so cached features can be reused across experiment modes.
 
-> **Note:** The full pipeline may take several hours, depending on the hardware and whether feature extraction has already been completed.
+> **Note:** The full pipeline may take several hours (Up to 24 hours), depending on the hardware and whether feature extraction has already been completed.
 
 ### Resuming an Interrupted Run
 
